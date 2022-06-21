@@ -10,8 +10,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/golang/glog"
-
 	"github.com/mxmCherry/openrtb/v15/openrtb2"
 	"github.com/prebid/prebid-server/adapters"
 	"github.com/prebid/prebid-server/config"
@@ -90,20 +88,15 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 }
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	var errors []error
 
 	formattedRequest, err := formatSsbcRequest(a, request)
 	if err != nil {
-		glog.Errorf("SSPBC: cannot prepare request")
-		errors = append(errors, err)
-		return nil, errors
+		return nil, []error{err}
 	}
 
 	requestJSON, err := json.Marshal(formattedRequest)
 	if err != nil {
-		glog.Errorf("SSPBC: cannot marshal request")
-		errors = append(errors, err)
-		return nil, errors
+		return nil, []error{err}
 	}
 
 	requestData := &adapters.RequestData{
@@ -195,14 +188,11 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 			if BidExt, ok := a.adSlots[BidId]; ok {
 				var BidIdStored = BidExt.PbSlot
 				bid.ImpID = BidIdStored
-			} else {
-				glog.Errorf("SSPBC: BidExt for this bid.impid not found - %s", BidId)
 			}
 
 			// read additional data from proxy
 			var BidDataExt SsbcResponseExt
 			if err := json.Unmarshal(bid.Ext, &BidDataExt); err != nil {
-				glog.Errorf("SSPBC: cannot unmarshal Bid Ext data")
 				errors = append(errors, err)
 			} else {
 				var adCreationError error
@@ -213,7 +203,6 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 				bid.AdM, adCreationError = a.createBannerAd(bid, BidDataExt, internalRequest, seatBid.Seat)
 
 				if adCreationError != nil {
-					glog.Errorf("SSPBC: cannot format creative")
 					errors = append(errors, err)
 				} else {
 					// append bid to responses
@@ -245,7 +234,6 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 	mcad.SeatBid[0].Bid[0] = bid
 	mcMarshalled, err := json.Marshal(mcad)
 	if err != nil {
-		glog.Errorf("SSPBC: Cannot Marshal mcad!")
 		return bid.AdM, err
 	}
 
@@ -270,7 +258,6 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 
 	var filledTemplate bytes.Buffer
 	if err := a.bannerTemplate.Execute(&filledTemplate, bannerData); err != nil {
-		glog.Errorf("SSPBC: Cannot execute banner template")
 		return bid.AdM, err
 	}
 
@@ -327,10 +314,8 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 
 		// Read Ext data for this imp. Note that errors here do not break the flow for this imp
 		if extBidderErr := json.Unmarshal(extI, &extBidder); extBidderErr != nil {
-			glog.Errorf("SSPBC: Error reading bid.ext %s", extBidderErr)
 		} else {
 			if extSSPErr := json.Unmarshal(extBidder.Bidder, &extSSP); extSSPErr != nil {
-				glog.Errorf("SSPBC: Error reading bidder-specific ext data %s", extSSPErr)
 			}
 		}
 
@@ -370,7 +355,6 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 		var newExtI SsbcRequestImpExt
 		newExtI.Data = extData
 		if impI.Ext, err = json.Marshal(newExtI); err != nil {
-			glog.Errorf("SSPBC: Cannot set ext data for the imp. This is a fatal error %s", err)
 			return nil, err
 		}
 
@@ -386,8 +370,6 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 	// add domain info
 	if url, parseError := url.Parse(request.Site.Page); parseError == nil {
 		request.Site.Domain = url.Hostname()
-	} else {
-		glog.Errorf("SSPBC: Cannot parse site url %s", parseError)
 	}
 
 	// set TEST Flag

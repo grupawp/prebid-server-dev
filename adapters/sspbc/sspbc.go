@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/golang/glog"
@@ -21,6 +20,9 @@ import (
 )
 
 const version = "5.6"
+
+// HTML template used to create banner ads
+const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0; padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.adlabel = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script></head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
 
 // MC payload (for banner ads)
 type McAd struct {
@@ -59,7 +61,7 @@ type SsbcResponseExt struct {
 	SlotId      string `json:"slotid"`
 }
 
-type SspbcAdapter struct {
+type adapter struct {
 	version  string
 	endpoint string
 	// adslots mapping
@@ -72,23 +74,13 @@ type SspbcAdapter struct {
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
 func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
-	// find path to template file
-	pathToTemplate := "./adapters/sspbc/bannerTemplate.html"
-	workingDir, err := os.Getwd()
-	if err == nil && strings.HasSuffix(workingDir, "sspbc") {
-		// this is a test running in adapter's directory
-		pathToTemplate = "bannerTemplate.html"
-	} else if err != nil {
-		// this error does not break createBannerAd flow
-		glog.Errorf("SSPBC: Cannot get working directory, assuming default path")
-	}
 
-	bannerTemplate, err := template.ParseFiles(pathToTemplate)
+	bannerTemplate, err := template.New("banner").Parse(bannerHTML)
 	if err != nil {
 		return nil, err
 	}
 
-	bidder := &SspbcAdapter{
+	bidder := &adapter{
 		endpoint:       config.Endpoint,
 		version:        version,
 		bannerTemplate: bannerTemplate,
@@ -97,7 +89,7 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 	return bidder, nil
 }
 
-func (a *SspbcAdapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
+func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
 	var errors []error
 
 	formattedRequest, err := formatSsbcRequest(a, request)
@@ -123,7 +115,7 @@ func (a *SspbcAdapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *a
 	return []*adapters.RequestData{requestData}, nil
 }
 
-func (a *SspbcAdapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest *adapters.RequestData, externalResponse *adapters.ResponseData) (*adapters.BidderResponse, []error) {
+func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest *adapters.RequestData, externalResponse *adapters.ResponseData) (*adapters.BidderResponse, []error) {
 	/*
 		  proxy responds with the following format
 			{
@@ -237,7 +229,7 @@ func (a *SspbcAdapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRe
 	return bidResponse, errors
 }
 
-func (a *SspbcAdapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request *openrtb2.BidRequest, seat string) (string, error) {
+func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request *openrtb2.BidRequest, seat string) (string, error) {
 	var mcad McAd
 
 	if strings.Contains(bid.AdM, "<!--preformatted-->") {
@@ -313,7 +305,7 @@ func getImpSize(Imp openrtb2.Imp) string {
 	return "1x1"
 }
 
-func formatSsbcRequest(a *SspbcAdapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
+func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	var err error
 	var siteId string
 	var isTest int

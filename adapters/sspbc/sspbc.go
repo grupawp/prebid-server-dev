@@ -121,47 +121,6 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 }
 
 func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest *adapters.RequestData, externalResponse *adapters.ResponseData) (*adapters.BidderResponse, []error) {
-	/*
-		  proxy responds with the following format
-			{
-			"cur": "PLN",
-			"id": "...",
-			"seatbid": [
-				{
-					"bid": [
-						{
-							"adm": "....",
-							"adomain": [
-								"sspbc-test"
-							],
-							"crid": "1234",
-							"ext": {
-								"adlabel": "Reklama",
-								"pubid": "431",
-								"siteid": "237503",
-								"slotid": "005",
-								"tagid": "slot"
-							},
-							"h": 250,
-						"id": "...",
-								"impid": "005",
-								"price": 95.95,
-							"w": 300
-						}
-					],
-					"seat": "sspbc-test"
-				}
-			],
-			"sn": "sspbc-test"
-			}
-
-		Note - we cannot read site SN, since response.sn is not defined in
-		openRTB2.BidResponse structure
-
-		For now we set SN as sspbc_go
-
-		Long term SN should be returned in bid.ext
-	*/
 
 	var errors []error
 
@@ -186,18 +145,21 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 
 	for _, seatBid := range response.SeatBid {
 		for _, bid := range seatBid.Bid {
-			var BidType openrtb_ext.BidType
-			var BidId = bid.ImpID
+			var bidType openrtb_ext.BidType
+			var bidId = bid.ImpID
 
 			/*
-			  here we should make a call to getBidType method, and based on detected type
-			  make call to createBannerAd, createVideoAd, createNativeAd methods
+			  Determine bid type
+			  At this moment we only check if bid contains Adm property
 
-			  for now we set it to "banner"
+			  Later updates will check for video & native data
 			*/
-			BidType = openrtb_ext.BidTypeBanner
+			if (bid.AdM != "") { 
+				bidType = openrtb_ext.BidTypeBanner
+			}
 
-			if BidExt, ok := a.adSlots[BidId]; ok {
+
+			if BidExt, ok := a.adSlots[bidId]; ok {
 				var BidIdStored = BidExt.PbSlot
 				bid.ImpID = BidIdStored
 			}
@@ -209,10 +171,16 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 			} else {
 				var adCreationError error
 
-				// Prepare ads (using different methods for banner, native, video)
-
-				// BANNER
-				bid.AdM, adCreationError = a.createBannerAd(bid, BidDataExt, internalRequest, seatBid.Seat)
+				/*
+					use correct ad creation method for a detected bid type
+					right now, we are only creating banner ads
+					if type is not detected / supported, throw error
+				*/
+				if (bidType == openrtb_ext.BidTypeBanner) { 
+					bid.AdM, adCreationError = a.createBannerAd(bid, BidDataExt, internalRequest, seatBid.Seat)
+				} else {
+					adCreationError = fmt.Errorf("Bid type is not supported: %s", bidType)
+				}
 
 				if adCreationError != nil {
 					errors = append(errors, err)
@@ -220,7 +188,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 					// append bid to responses
 					bidResponse.Bids = append(bidResponse.Bids, &adapters.TypedBid{
 						Bid:     &bid,
-						BidType: BidType,
+						BidType: bidType,
 					})
 				}
 			}
@@ -263,19 +231,12 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 
 	/*
 		Prepare banner html, using template file
-
-		Note: Prebidserver bidders have access only to gdpr data in user ext, which is not what we need (as mcad uses prebid.js gdpr format)
-		Therefore, we are not creating window.gdpr. This will force banner creative to execute it's own call to TCF2
 	*/
 
 	var filledTemplate bytes.Buffer
 	if err := a.bannerTemplate.Execute(&filledTemplate, bannerData); err != nil {
 		return bid.AdM, err
 	}
-
-	/*
-		byteTemplate := []byte(filledTemplate.String())
-		fmt.Println(base64.StdEncoding.EncodeToString(byteTemplate)) */
 
 	return filledTemplate.String(), nil
 }

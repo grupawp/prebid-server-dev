@@ -99,9 +99,21 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 		return nil, []error{err}
 	}
 
+	requestUrl, err := url.Parse(a.endpoint)
+	if err != nil {
+		return nil, []error{err}
+	} else {
+		// add query parameters to request
+		queryParams := requestUrl.Query()
+		queryParams.Add("bdver", a.version) // adapter version
+		queryParams.Add("inver", "0") // integration version (adapter, tag, ...)
+		requestUrl.RawQuery = queryParams.Encode()	
+	}
+
+
 	requestData := &adapters.RequestData{
 		Method: "POST",
-		Uri:    fmt.Sprintf("%s?bdver=%s&inver=0", a.endpoint, a.version),
+		Uri:    requestUrl.String(),
 		Body:   requestJSON,
 	}
 

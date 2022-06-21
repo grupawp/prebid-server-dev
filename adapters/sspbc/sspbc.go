@@ -242,27 +242,21 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 }
 
 func getImpSize(Imp openrtb2.Imp) string {
-	if Imp.Video != nil {
-		return fmt.Sprintf("%dx%d", Imp.Video.W, Imp.Video.H)
-	}
+	impSize := "1x1"
 
 	if Imp.Banner != nil {
-		sb := strings.Builder{}
 		areaMax := int64(0)
-		sb.WriteString("1x1")
 		for _, sizeI := range Imp.Banner.Format {
 			areaI := sizeI.W * sizeI.H
 			if areaI > areaMax {
 				areaMax = areaI
-				sb.Reset()
-				sb.WriteString(fmt.Sprintf("%dx%d", sizeI.W, sizeI.H))
+				impSize = fmt.Sprintf("%dx%d", sizeI.W, sizeI.H)
 			}
 		}
-		return sb.String()
 	}
 
 	// default fallback
-	return "1x1"
+	return impSize
 }
 
 func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {

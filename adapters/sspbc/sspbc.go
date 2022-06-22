@@ -20,20 +20,20 @@ import (
 const version = "5.6"
 
 // MC payload (for banner ads)
-type McAd struct {
+type mcAd struct {
 	Id      string             `json:"id"`
 	Seat    string             `json:"seat"`
 	SeatBid []openrtb2.SeatBid `json:"seatbid"`
 }
 
 // Adslot data (oneCode detection)
-type AdSlotData struct {
+type adSlotData struct {
 	PbSlot string `json:"pbslot"`
 	PbSize string `json:"pbsize"`
 }
 
 // Banner Template payload
-type TemplatePayload struct {
+type templatePayload struct {
 	SiteId  string `json:"siteid"`
 	SlotId  string `json:"slotid"`
 	AdLabel string `json:"adlabel"`
@@ -44,12 +44,12 @@ type TemplatePayload struct {
 }
 
 // Ext data in request.imp
-type SsbcRequestImpExt struct {
-	Data AdSlotData `json:"data"`
+type requestImpExt struct {
+	Data adSlotData `json:"data"`
 }
 
 // Ext data added by proxy
-type SsbcResponseExt struct {
+type responseExt struct {
 	AdLabel     string `json:"adlabel"`
 	PublisherId string `json:"pubid"`
 	SiteId      string `json:"siteid"`
@@ -61,7 +61,7 @@ type adapter struct {
 	endpoint string
 	// adslots mapping
 	// map key is slot id (as sent and received from proxy)
-	adSlots        map[string]AdSlotData
+	adSlots        map[string]adSlotData
 	adSizes        map[string]int
 	bannerTemplate *template.Template
 }
@@ -163,7 +163,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 			}
 
 			// read additional data from proxy
-			var BidDataExt SsbcResponseExt
+			var BidDataExt responseExt
 			if err := json.Unmarshal(bid.Ext, &BidDataExt); err != nil {
 				errors = append(errors, err)
 			} else {
@@ -196,8 +196,8 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	return bidResponse, errors
 }
 
-func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request *openrtb2.BidRequest, seat string) (string, error) {
-	var mcad McAd
+func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *openrtb2.BidRequest, seat string) (string, error) {
+	var mcad mcAd
 
 	if strings.Contains(bid.AdM, "<!--preformatted-->") {
 		// Banner ad is already formatted
@@ -217,7 +217,7 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 
 	mcEncoded := base64.URLEncoding.EncodeToString(mcMarshalled)
 
-	bannerData := &TemplatePayload{
+	bannerData := &templatePayload{
 		SiteId:  ext.SiteId,
 		SlotId:  ext.SlotId,
 		AdLabel: ext.AdLabel,
@@ -261,7 +261,7 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 
 	// check if adSlots and adSizes maps are initialized
 	if a.adSlots == nil {
-		a.adSlots = make(map[string]AdSlotData)
+		a.adSlots = make(map[string]adSlotData)
 	}
 	if a.adSizes == nil {
 		a.adSizes = make(map[string]int)
@@ -272,7 +272,7 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 		var extSSP openrtb_ext.ExtImpSspbc
 		var extI = impI.Ext
 		var extBidder adapters.ExtImpBidder
-		var extData AdSlotData
+		var extData adSlotData
 
 		// Read additional data for this imp.
 		// Errors here do not break the flow for this imp, and are ignored
@@ -313,7 +313,7 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 
 		// update bid.ext - send pbslot, pbsize
 		// inability to set bid.ext will cause request to be invalid
-		var newExtI SsbcRequestImpExt
+		var newExtI requestImpExt
 		newExtI.Data = extData
 		if impI.Ext, err = json.Marshal(newExtI); err != nil {
 			return nil, err

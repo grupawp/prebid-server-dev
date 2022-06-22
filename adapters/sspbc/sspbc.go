@@ -19,9 +19,6 @@ import (
 
 const version = "5.6"
 
-// HTML template used to create banner ads
-const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0; padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.adlabel = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script></head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
-
 // MC payload (for banner ads)
 type McAd struct {
 	Id      string             `json:"id"`
@@ -73,6 +70,9 @@ type adapter struct {
 // Builder builds a new instance of the sspBC adapter
 func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
 
+	// HTML template used to create banner ads
+	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0; padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.adlabel = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script></head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
+
 	bannerTemplate, err := template.New("banner").Parse(bannerHTML)
 	if err != nil {
 		return nil, err
@@ -102,17 +102,16 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 	requestUrl, err := url.Parse(a.endpoint)
 	if err != nil {
 		return nil, []error{err}
-	} else {
-		// add query parameters to request
-		queryParams := requestUrl.Query()
-		queryParams.Add("bdver", a.version) // adapter version
-		queryParams.Add("inver", "0") // integration version (adapter, tag, ...)
-		requestUrl.RawQuery = queryParams.Encode()	
 	}
 
+	// add query parameters to request
+	queryParams := requestUrl.Query()
+	queryParams.Add("bdver", a.version) // adapter version
+	queryParams.Add("inver", "0")       // integration version (adapter, tag, ...)
+	requestUrl.RawQuery = queryParams.Encode()
 
 	requestData := &adapters.RequestData{
-		Method: "POST",
+		Method: http.MethodPost,
 		Uri:    requestUrl.String(),
 		Body:   requestJSON,
 	}
@@ -154,10 +153,9 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 
 			  Later updates will check for video & native data
 			*/
-			if (bid.AdM != "") { 
+			if bid.AdM != "" {
 				bidType = openrtb_ext.BidTypeBanner
 			}
-
 
 			if BidExt, ok := a.adSlots[bidId]; ok {
 				var BidIdStored = BidExt.PbSlot
@@ -176,10 +174,10 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 					right now, we are only creating banner ads
 					if type is not detected / supported, throw error
 				*/
-				if (bidType == openrtb_ext.BidTypeBanner) { 
+				if bidType == openrtb_ext.BidTypeBanner {
 					bid.AdM, adCreationError = a.createBannerAd(bid, BidDataExt, internalRequest, seatBid.Seat)
 				} else {
-					adCreationError = fmt.Errorf("Bid type is not supported: %s", bidType)
+					adCreationError = fmt.Errorf("bid type is not supported: %s", bidType)
 				}
 
 				if adCreationError != nil {
@@ -229,10 +227,7 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext SsbcResponseExt, request 
 		McAd:    mcEncoded,
 	}
 
-	/*
-		Prepare banner html, using template file
-	*/
-
+	// Prepare banner html, using template file
 	var filledTemplate bytes.Buffer
 	if err := a.bannerTemplate.Execute(&filledTemplate, bannerData); err != nil {
 		return bid.AdM, err
@@ -279,11 +274,10 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 		var extBidder adapters.ExtImpBidder
 		var extData AdSlotData
 
-		// Read Ext data for this imp. Note that errors here do not break the flow for this imp
-		if extBidderErr := json.Unmarshal(extI, &extBidder); extBidderErr != nil {
-		} else {
-			if extSSPErr := json.Unmarshal(extBidder.Bidder, &extSSP); extSSPErr != nil {
-			}
+		// Read additional data for this imp.
+		// Errors here do not break the flow for this imp, and are ignored
+		if err := json.Unmarshal(extI, &extBidder); err == nil {
+			_ = json.Unmarshal(extBidder.Bidder, &extSSP)
 		}
 
 		// store SiteID

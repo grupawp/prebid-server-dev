@@ -360,6 +360,7 @@ func CoreBidderNames() []BidderName {
 		BidderSmileWanted,
 		BidderSonobi,
 		BidderSovrn,
+		BidderSspBC,
 		BidderStreamkey,
 		BidderStroeerCore,
 		BidderSynacormedia,

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/mxmCherry/openrtb/v15/openrtb2"
 	"github.com/prebid/prebid-server/adapters"
@@ -63,9 +62,7 @@ type adapter struct {
 	// adslots mapping
 	// map key is slot id (as sent and received from proxy)
 	adSlots        map[string]adSlotData
-	adSizes        map[string]int
 	bannerTemplate *template.Template
-	mux 			sync.Mutex
 }
 
 // ---------------ADAPTER INTERFACE------------------
@@ -85,7 +82,6 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 		version:        version,
 		bannerTemplate: bannerTemplate,
 		adSlots:        make(map[string]adSlotData),
-		adSizes:        make(map[string]int),
 	}
 
 	return bidder, nil
@@ -260,17 +256,9 @@ func getImpSize(Imp openrtb2.Imp) string {
 
 func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
     var extData adSlotData
-    a.mux.Lock()
-    defer a.mux.Unlock()
-    // save slot data
-    a.adSizes[impSize] = a.adSizes[impSize] + 1
-    if a.adSlots[impI.ID].PbSlot != "" {
-        extData = a.adSlots[impI.ID]
-    } else {
-        extData.PbSlot = impI.TagID
-        extData.PbSize = fmt.Sprintf("%s_%d", impSize, a.adSizes[impSize])
-        a.adSlots[impI.ID] = extData
-    }
+    extData.PbSlot = impI.TagID
+    extData.PbSize = impSize
+    a.adSlots[impI.ID] = extData
     return extData
 }
 
@@ -312,16 +300,7 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 
 		// check imp size and number of times it has been used
 		impSize := getImpSize(impI)
-
-		// save slot data
-		a.adSizes[impSize] = a.adSizes[impSize] + 1
-		if a.adSlots[impI.ID].PbSlot != "" {
-			extData = a.adSlots[impI.ID]
-		} else {
-			extData.PbSlot = impI.TagID
-			extData.PbSize = fmt.Sprintf("%s_%d", impSize, a.adSizes[impSize])
-			a.adSlots[impI.ID] = extData
-		}
+		extData = a.fillAdSlotData(impI, impSize)
 
 		// update bid.ext - send pbslot, pbsize
 		// inability to set bid.ext will cause request to be invalid

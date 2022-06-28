@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/mxmCherry/openrtb/v15/openrtb2"
 	"github.com/prebid/prebid-server/adapters"
@@ -64,7 +63,7 @@ type adapter struct {
 	// map key is slot id (as sent and received from proxy)
 	adSlots        map[string]adSlotData
 	bannerTemplate *template.Template
-	mux 			sync.Mutex
+	//mux 			sync.Mutex
 }
 
 // ---------------ADAPTER INTERFACE------------------
@@ -258,8 +257,8 @@ func getImpSize(Imp openrtb2.Imp) string {
 
 func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
     var extData adSlotData
-    a.mux.Lock()
-    defer a.mux.Unlock()
+    // a.mux.Lock()
+    // defer a.mux.Unlock()
     extData.PbSlot = impI.TagID
     extData.PbSize = impSize
     a.adSlots[impI.ID] = extData

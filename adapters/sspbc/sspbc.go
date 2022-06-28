@@ -63,7 +63,6 @@ type adapter struct {
 	// map key is slot id (as sent and received from proxy)
 	adSlots        map[string]adSlotData
 	bannerTemplate *template.Template
-	//mux 			sync.Mutex
 }
 
 // ---------------ADAPTER INTERFACE------------------

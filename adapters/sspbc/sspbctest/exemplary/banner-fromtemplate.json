@@ -62,7 +62,7 @@
                             "ext": {
                                 "data": {
                                     "pbslot": "slot",
-                                    "pbsize": "300x250_1"
+                                    "pbsize": "300x250"
                                 }
                             }
                         }
@@ -96,7 +96,7 @@
                         {
                             "bid": [
                                 {
-                                    "adm": "{\"bunch\":\"237503\",\"capping\":\"\",\"server\":\"s\",\"campaign\":\"c\",\"score\":\"1\",\"creations\":[{\"type\":\"image\",\"src\":\"https:\/\/bdr.wpcdn.pl\/tests\/test-300x250.png\",\"trackers\":{},\"width\":300,\"height\":250}],\"code\":\"1\",\"aabVendors\":false,\"slot\":\"005\",\"redir\":\"https:\/\/www.wp.pl\",\"wpclid\":\"1\"}" ,
+                                    "adm": "{\"bunch\":\"237503\",\"capping\":\"\",\"server\":\"s\",\"campaign\":\"c\",\"score\":\"1\",\"creations\":[{\"type\":\"image\",\"src\":\"https:\/\/bdr.wpcdn.pl\/tests\/test-300x250.png\",\"trackers\":{},\"width\":300,\"height\":250}],\"code\":\"1\",\"aabVendors\":false,\"slot\":\"005\",\"redir\":\"https:\/\/www.wp.pl\",\"wpclid\":\"1\"}",
                                     "adomain": [
                                         "sspbc-test"
                                     ],

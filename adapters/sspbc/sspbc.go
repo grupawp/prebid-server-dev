@@ -257,8 +257,6 @@ func getImpSize(Imp openrtb2.Imp) string {
 
 func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
     var extData adSlotData
-    // a.mux.Lock()
-    // defer a.mux.Unlock()
     extData.PbSlot = impI.TagID
     extData.PbSize = impSize
     a.adSlots[impI.ID] = extData

@@ -269,13 +269,6 @@ func getImpSize(Imp openrtb2.Imp) string {
 	return impSize
 }
 
-func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
-    var extData adSlotData
-    extData.PbSlot = impI.TagID
-    extData.PbSize = impSize
-    return extData
-}
-
 func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	var err error
 	var siteId string

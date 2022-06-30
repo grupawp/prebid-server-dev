@@ -59,9 +59,6 @@ type responseExt struct {
 type adapter struct {
 	version  string
 	endpoint string
-	// adslots mapping
-	// map key is slot id (as sent and received from proxy)
-	adSlots        map[string]adSlotData
 	bannerTemplate *template.Template
 }
 
@@ -81,7 +78,6 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 		endpoint:       config.Endpoint,
 		version:        version,
 		bannerTemplate: bannerTemplate,
-		adSlots:        make(map[string]adSlotData),
 	}
 
 	return bidder, nil
@@ -89,7 +85,7 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
 
-	formattedRequest, err := formatSsbcRequest(a, request)
+	formattedRequest, err := formatSspBcRequest(a, request)
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -134,6 +130,12 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 		return nil, []error{err}
 	}
 
+	// unmarshall original request - we will need it to recover imp.Id
+	var requestBody openrtb2.BidRequest
+	if err := json.Unmarshal(externalRequest.Body, &requestBody); err != nil {
+		return nil, []error{err}
+	}
+
 	var response openrtb2.BidResponse
 	if err := json.Unmarshal(externalResponse.Body, &response); err != nil {
 		return nil, []error{err}
@@ -145,7 +147,6 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	for _, seatBid := range response.SeatBid {
 		for _, bid := range seatBid.Bid {
 			var bidType openrtb_ext.BidType
-			var bidId = bid.ImpID
 
 			/*
 			  Determine bid type
@@ -157,14 +158,15 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 				bidType = openrtb_ext.BidTypeBanner
 			}
 
-			if BidExt, ok := a.adSlots[bidId]; ok {
-				var BidIdStored = BidExt.PbSlot
-				bid.ImpID = BidIdStored
-			}
-
+			/*
+			  Recover original ImpID
+			  (stored on request in TagID)
+			*/
+			bid.ImpID = getOriginalImpId(bid.ImpID, requestBody.Imp)
+		
 			// read additional data from proxy
-			var BidDataExt responseExt
-			if err := json.Unmarshal(bid.Ext, &BidDataExt); err != nil {
+			var bidDataExt responseExt
+			if err := json.Unmarshal(bid.Ext, &bidDataExt); err != nil {
 				errors = append(errors, err)
 			} else {
 				var adCreationError error
@@ -175,7 +177,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 					if type is not detected / supported, throw error
 				*/
 				if bidType == openrtb_ext.BidTypeBanner {
-					bid.AdM, adCreationError = a.createBannerAd(bid, BidDataExt, internalRequest, seatBid.Seat)
+					bid.AdM, adCreationError = a.createBannerAd(bid, bidDataExt, internalRequest, seatBid.Seat)
 				} else {
 					adCreationError = fmt.Errorf("bid type is not supported: %s", bidType)
 				}
@@ -194,6 +196,18 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	}
 
 	return bidResponse, errors
+}
+
+
+func getOriginalImpId(impId string, imps []openrtb2.Imp) (string){ 
+
+	for _, imp := range imps {
+		if (imp.ID == impId) { 
+			return imp.TagID
+		}
+	}
+
+	return impId;
 }
 
 func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *openrtb2.BidRequest, seat string) (string, error) {
@@ -254,29 +268,20 @@ func getImpSize(Imp openrtb2.Imp) string {
 	return impSize
 }
 
-func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
-    var extData adSlotData
-    extData.PbSlot = impI.TagID
-    extData.PbSize = impSize
-    a.adSlots[impI.ID] = extData
-    return extData
-}
-
-func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
+func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	var err error
 	var siteId string
 	var isTest int
 
-	for i, impI := range request.Imp {
+	for i, imp := range request.Imp {
 		// read ext data for the impression
 		var extSSP openrtb_ext.ExtImpSspbc
-		var extI = impI.Ext
+		var ext = imp.Ext
 		var extBidder adapters.ExtImpBidder
-		var extData adSlotData
 
 		// Read additional data for this imp.
 		// Errors here do not break the flow for this imp, and are ignored
-		if err := json.Unmarshal(extI, &extBidder); err == nil {
+		if err := json.Unmarshal(ext, &extBidder); err == nil {
 			_ = json.Unmarshal(extBidder.Bidder, &extSSP)
 		}
 
@@ -291,27 +296,30 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 		}
 
 		// save current imp.id (adUnit name) as imp.tagid
-		impI.TagID = impI.ID
+		// we will recover it in makeBids
+		imp.TagID = imp.ID
 
 		// if there is a placement id, use it in imp.id
 		if extSSP.Id != "" {
-			impI.ID = extSSP.Id
+			imp.ID = extSSP.Id
 		}
 
-		// check imp size and number of times it has been used
-		impSize := getImpSize(impI)
-		extData = a.fillAdSlotData(impI, impSize)
-
-		// update bid.ext - send pbslot, pbsize
+		// check imp size and update e.ext - send pbslot, pbsize
 		// inability to set bid.ext will cause request to be invalid
-		var newExtI requestImpExt
-		newExtI.Data = extData
-		if impI.Ext, err = json.Marshal(newExtI); err != nil {
+		impSize := getImpSize(imp)
+		newExt := requestImpExt{
+			Data: adSlotData{
+				PbSlot: imp.TagID,
+				PbSize: impSize,
+			},
+		}
+		
+		if imp.Ext, err = json.Marshal(newExt); err != nil {
 			return nil, err
 		}
 
 		// save updated imp
-		request.Imp[i] = impI
+		request.Imp[i] = imp
 	}
 
 	// update site info (ID, of present, and request domain)

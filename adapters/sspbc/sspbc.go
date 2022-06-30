@@ -200,11 +200,11 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 }
 
 
-func getOriginalImpId(impId string, Imps []openrtb2.Imp) (string){ 
+func getOriginalImpId(impId string, imps []openrtb2.Imp) (string){ 
 
-	for _, impI := range Imps {
-		if (impI.ID == impId) { 
-			return impI.TagID
+	for _, imp := range imps {
+		if (imp.ID == impId) { 
+			return imp.TagID
 		}
 	}
 

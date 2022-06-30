@@ -85,7 +85,7 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
 
-	formattedRequest, err := formatSsbcRequest(a, request)
+	formattedRequest, err := formatSspBcRequest(a, request)
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -201,15 +201,14 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 
 
 func getOriginalImpId(impId string, Imps []openrtb2.Imp) (string){ 
-	result := impId
 
 	for _, impI := range Imps {
 		if (impI.ID == impId) { 
-			result = impI.TagID
+			return impI.TagID
 		}
 	}
 
-	return result;
+	return impId;
 }
 
 func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *openrtb2.BidRequest, seat string) (string, error) {
@@ -277,20 +276,20 @@ func (a *adapter) fillAdSlotData(impI openrtb2.Imp, impSize string) adSlotData {
     return extData
 }
 
-func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
+func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	var err error
 	var siteId string
 	var isTest int
 
-	for i, impI := range request.Imp {
+	for i, imp := range request.Imp {
 		// read ext data for the impression
 		var extSSP openrtb_ext.ExtImpSspbc
-		var extI = impI.Ext
+		var ext = imp.Ext
 		var extBidder adapters.ExtImpBidder
 
 		// Read additional data for this imp.
 		// Errors here do not break the flow for this imp, and are ignored
-		if err := json.Unmarshal(extI, &extBidder); err == nil {
+		if err := json.Unmarshal(ext, &extBidder); err == nil {
 			_ = json.Unmarshal(extBidder.Bidder, &extSSP)
 		}
 
@@ -306,24 +305,29 @@ func formatSsbcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidR
 
 		// save current imp.id (adUnit name) as imp.tagid
 		// we will recover it in makeBids
-		impI.TagID = impI.ID
+		imp.TagID = imp.ID
 
 		// if there is a placement id, use it in imp.id
 		if extSSP.Id != "" {
-			impI.ID = extSSP.Id
+			imp.ID = extSSP.Id
 		}
 
-		// check imp size and update bid.ext - send pbslot, pbsize
+		// check imp size and update e.ext - send pbslot, pbsize
 		// inability to set bid.ext will cause request to be invalid
-		impSize := getImpSize(impI)
-		var newExtI requestImpExt
-		newExtI.Data = a.fillAdSlotData(impI, impSize)
-		if impI.Ext, err = json.Marshal(newExtI); err != nil {
+		impSize := getImpSize(imp)
+		newExt := requestImpExt{
+			Data: adSlotData{
+				PbSlot: imp.TagID,
+				PbSize: impSize,
+			},
+		}
+		
+		if imp.Ext, err = json.Marshal(newExt); err != nil {
 			return nil, err
 		}
 
 		// save updated imp
-		request.Imp[i] = impI
+		request.Imp[i] = imp
 	}
 
 	// update site info (ID, of present, and request domain)

@@ -135,7 +135,6 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	if err := json.Unmarshal(externalRequest.Body, &requestBody); err != nil {
 		return nil, []error{err}
 	}
-	requestImps := requestBody.Imp
 
 	var response openrtb2.BidResponse
 	if err := json.Unmarshal(externalResponse.Body, &response); err != nil {
@@ -163,7 +162,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 			  Recover original ImpID
 			  (stored on request in TagID)
 			*/
-			bid.ImpID = getOriginalImpId(bid.ImpID, requestImps)
+			bid.ImpID = getOriginalImpId(bid.ImpID, requestBody.Imp)
 		
 			// read additional data from proxy
 			var bidDataExt responseExt

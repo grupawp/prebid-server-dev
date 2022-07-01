@@ -17,7 +17,10 @@ import (
 	"github.com/prebid/prebid-server/openrtb_ext"
 )
 
-const version = "5.6"
+const (
+	version         = "5.6"
+	impFallbackSize = "1x1"
+)
 
 // MC payload (for banner ads)
 type mcAd struct {
@@ -57,15 +60,14 @@ type responseExt struct {
 }
 
 type adapter struct {
-	version  string
-	endpoint string
+	version        string
+	endpoint       string
 	bannerTemplate *template.Template
 }
 
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
 func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
-
 	// HTML template used to create banner ads
 	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0; padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.adlabel = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script></head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
 
@@ -84,7 +86,6 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 }
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-
 	formattedRequest, err := formatSspBcRequest(a, request)
 	if err != nil {
 		return nil, []error{err}
@@ -95,20 +96,20 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 		return nil, []error{err}
 	}
 
-	requestUrl, err := url.Parse(a.endpoint)
+	requestURL, err := url.Parse(a.endpoint)
 	if err != nil {
 		return nil, []error{err}
 	}
 
 	// add query parameters to request
-	queryParams := requestUrl.Query()
+	queryParams := requestURL.Query()
 	queryParams.Add("bdver", a.version) // adapter version
 	queryParams.Add("inver", "0")       // integration version (adapter, tag, ...)
-	requestUrl.RawQuery = queryParams.Encode()
+	requestURL.RawQuery = queryParams.Encode()
 
 	requestData := &adapters.RequestData{
 		Method: http.MethodPost,
-		Uri:    requestUrl.String(),
+		Uri:    requestURL.String(),
 		Body:   requestJSON,
 	}
 
@@ -116,9 +117,6 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 }
 
 func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest *adapters.RequestData, externalResponse *adapters.ResponseData) (*adapters.BidderResponse, []error) {
-
-	var errors []error
-
 	if externalResponse.StatusCode == http.StatusNoContent {
 		return nil, nil
 	}
@@ -144,6 +142,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	bidResponse := adapters.NewBidderResponseWithBidsCapacity(len(internalRequest.Imp))
 	bidResponse.Currency = response.Cur
 
+	var errors []error
 	for _, seatBid := range response.SeatBid {
 		for _, bid := range seatBid.Bid {
 			var bidType openrtb_ext.BidType
@@ -162,8 +161,8 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 			  Recover original ImpID
 			  (stored on request in TagID)
 			*/
-			bid.ImpID = getOriginalImpId(bid.ImpID, requestBody.Imp)
-		
+			bid.ImpID = getOriginalImpID(bid.ImpID, requestBody.Imp)
+
 			// read additional data from proxy
 			var bidDataExt responseExt
 			if err := json.Unmarshal(bid.Ext, &bidDataExt); err != nil {
@@ -183,7 +182,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 				}
 
 				if adCreationError != nil {
-					errors = append(errors, err)
+					errors = append(errors, adCreationError)
 				} else {
 					// append bid to responses
 					bidResponse.Bids = append(bidResponse.Bids, &adapters.TypedBid{
@@ -198,16 +197,14 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	return bidResponse, errors
 }
 
-
-func getOriginalImpId(impId string, imps []openrtb2.Imp) (string){ 
-
+func getOriginalImpID(impID string, imps []openrtb2.Imp) string {
 	for _, imp := range imps {
-		if (imp.ID == impId) { 
+		if imp.ID == impID {
 			return imp.TagID
 		}
 	}
 
-	return impId;
+	return impID
 }
 
 func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *openrtb2.BidRequest, seat string) (string, error) {
@@ -224,12 +221,11 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *ope
 	mcad.SeatBid = make([]openrtb2.SeatBid, 1)
 	mcad.SeatBid[0].Bid = make([]openrtb2.Bid, 1)
 	mcad.SeatBid[0].Bid[0] = bid
+
 	mcMarshalled, err := json.Marshal(mcad)
 	if err != nil {
-		return bid.AdM, err
+		return "", err
 	}
-
-	mcEncoded := base64.URLEncoding.EncodeToString(mcMarshalled)
 
 	bannerData := &templatePayload{
 		SiteId:  ext.SiteId,
@@ -238,56 +234,61 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *ope
 		PubId:   ext.PublisherId,
 		Page:    request.Site.Page,
 		Referer: request.Site.Ref,
-		McAd:    mcEncoded,
+		McAd:    base64.URLEncoding.EncodeToString(mcMarshalled),
 	}
 
 	// Prepare banner html, using template file
 	var filledTemplate bytes.Buffer
 	if err := a.bannerTemplate.Execute(&filledTemplate, bannerData); err != nil {
-		return bid.AdM, err
+		return "", err
 	}
 
 	return filledTemplate.String(), nil
 }
 
-func getImpSize(Imp openrtb2.Imp) string {
-	impSize := "1x1"
+func getImpSize(imp openrtb2.Imp) string {
+	if imp.Banner == nil || len(imp.Banner.Format) == 0 {
+		return impFallbackSize
+	}
 
-	if Imp.Banner != nil {
-		areaMax := int64(0)
-		for _, sizeI := range Imp.Banner.Format {
-			areaI := sizeI.W * sizeI.H
-			if areaI > areaMax {
-				areaMax = areaI
-				impSize = fmt.Sprintf("%dx%d", sizeI.W, sizeI.H)
-			}
+	var (
+		areaMax int64
+		impSize = impFallbackSize
+	)
+
+	for _, size := range imp.Banner.Format {
+		area := size.W * size.H
+		if area > areaMax {
+			areaMax = area
+			impSize = fmt.Sprintf("%dx%d", size.W, size.H)
 		}
 	}
 
-	// default fallback
+	if areaMax == 0 {
+		return impFallbackSize
+	}
+
 	return impSize
 }
 
 func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
-	var err error
-	var siteId string
+	var siteID string
 	var isTest int
 
 	for i, imp := range request.Imp {
 		// read ext data for the impression
 		var extSSP openrtb_ext.ExtImpSspbc
-		var ext = imp.Ext
 		var extBidder adapters.ExtImpBidder
 
 		// Read additional data for this imp.
 		// Errors here do not break the flow for this imp, and are ignored
-		if err := json.Unmarshal(ext, &extBidder); err == nil {
+		if err := json.Unmarshal(imp.Ext, &extBidder); err == nil {
 			_ = json.Unmarshal(extBidder.Bidder, &extSSP)
 		}
 
 		// store SiteID
 		if extSSP.SiteId != "" {
-			siteId = extSSP.SiteId
+			siteID = extSSP.SiteId
 		}
 
 		// store test info
@@ -307,29 +308,30 @@ func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.Bid
 		// check imp size and update e.ext - send pbslot, pbsize
 		// inability to set bid.ext will cause request to be invalid
 		impSize := getImpSize(imp)
-		newExt := requestImpExt{
+		impExt := requestImpExt{
 			Data: adSlotData{
 				PbSlot: imp.TagID,
 				PbSize: impSize,
 			},
 		}
-		
-		if imp.Ext, err = json.Marshal(newExt); err != nil {
+
+		impExtJSON, err := json.Marshal(impExt)
+		if err != nil {
 			return nil, err
 		}
-
+		imp.Ext = impExtJSON
 		// save updated imp
 		request.Imp[i] = imp
 	}
 
 	// update site info (ID, of present, and request domain)
-	if siteId != "" {
-		request.Site.ID = siteId
+	if siteID != "" {
+		request.Site.ID = siteID
 	}
 
 	// add domain info
-	if url, parseError := url.Parse(request.Site.Page); parseError == nil {
-		request.Site.Domain = url.Hostname()
+	if siteURL, err := url.Parse(request.Site.Page); err == nil {
+		request.Site.Domain = siteURL.Hostname()
 	}
 
 	// set TEST Flag

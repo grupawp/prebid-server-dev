@@ -1,4 +1,4 @@
-package sspbc
+package sspBC
 
 import (
 	"bytes"

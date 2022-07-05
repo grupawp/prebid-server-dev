@@ -264,10 +264,6 @@ func getImpSize(imp openrtb2.Imp) string {
 		}
 	}
 
-	if areaMax == 0 {
-		return impFallbackSize
-	}
-
 	return impSize
 }
 

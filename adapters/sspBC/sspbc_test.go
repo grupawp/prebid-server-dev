@@ -9,7 +9,7 @@ import (
 )
 
 func TestJsonSamples(t *testing.T) {
-	bidder, buildErr := Builder(openrtb_ext.BidderConnectAd, config.Adapter{
+	bidder, buildErr := Builder(openrtb_ext.BidderSspBC, config.Adapter{
 		Endpoint: "http://ssp.wp.test/bidder/"})
 
 	if buildErr != nil {

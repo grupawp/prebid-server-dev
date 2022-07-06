@@ -22,20 +22,20 @@ const (
 	impFallbackSize = "1x1"
 )
 
-// MC payload (for banner ads)
+// mcAd defines the MC payload for banner ads.
 type mcAd struct {
 	Id      string             `json:"id"`
 	Seat    string             `json:"seat"`
 	SeatBid []openrtb2.SeatBid `json:"seatbid"`
 }
 
-// Adslot data (oneCode detection)
+// adSlotData defines struct used for the oneCode detection.
 type adSlotData struct {
 	PbSlot string `json:"pbslot"`
 	PbSize string `json:"pbsize"`
 }
 
-// Banner Template payload
+// templatePayload represents the banner template payload.
 type templatePayload struct {
 	SiteId  string `json:"siteid"`
 	SlotId  string `json:"slotid"`
@@ -46,12 +46,12 @@ type templatePayload struct {
 	McAd    string `json:"mcad"`
 }
 
-// Ext data in request.imp
+// requestImpExt represents the ext field of the request imp field.
 type requestImpExt struct {
 	Data adSlotData `json:"data"`
 }
 
-// Ext data added by proxy
+// responseExt represents ext data added by proxy.
 type responseExt struct {
 	AdLabel     string `json:"adlabel"`
 	PublisherId string `json:"pubid"`

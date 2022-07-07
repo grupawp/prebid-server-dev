@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -272,6 +273,10 @@ func getImpSize(imp openrtb2.Imp) string {
 }
 
 func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
+	if request.Site == nil {
+		return nil, errors.New("site cannot be nill")
+	}
+
 	var siteID string
 	var isTest int
 
@@ -323,6 +328,9 @@ func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.Bid
 		// save updated imp
 		request.Imp[i] = imp
 	}
+
+	siteCopy := *request.Site
+	request.Site = &siteCopy
 
 	// update site info (ID, of present, and request domain)
 	if siteID != "" {

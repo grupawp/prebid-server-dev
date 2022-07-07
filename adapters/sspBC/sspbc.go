@@ -60,7 +60,6 @@ type responseExt struct {
 }
 
 type adapter struct {
-	version        string
 	endpoint       string
 	bannerTemplate *template.Template
 }
@@ -69,7 +68,14 @@ type adapter struct {
 // Builder builds a new instance of the sspBC adapter
 func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
 	// HTML template used to create banner ads
-	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0; padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.adlabel = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script></head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
+	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="` +
+		`width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0;` +
+		` padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.ad` +
+		`label = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '` +
+		`{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse(atob('{{.McAd}}'));</script><` +
+		`/head><body><div id="c"></div><script async crossorigin nomodule src="//std.wpcdn.pl/wpjslib/wp` +
+		`jslib-inline.js" id="wpjslib"></script><script async crossorigin type="module" src="//std.wpcdn` +
+		`.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"></script></body></html>`
 
 	bannerTemplate, err := template.New("banner").Parse(bannerHTML)
 	if err != nil {
@@ -78,7 +84,6 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 
 	bidder := &adapter{
 		endpoint:       config.Endpoint,
-		version:        version,
 		bannerTemplate: bannerTemplate,
 	}
 
@@ -103,8 +108,8 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 
 	// add query parameters to request
 	queryParams := requestURL.Query()
-	queryParams.Add("bdver", a.version) // adapter version
-	queryParams.Add("inver", "0")       // integration version (adapter, tag, ...)
+	queryParams.Add("bdver", version) // adapter version
+	queryParams.Add("inver", "0")     // integration version (adapter, tag, ...)
 	requestURL.RawQuery = queryParams.Encode()
 
 	requestData := &adapters.RequestData{
@@ -218,9 +223,9 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *ope
 	// create McAd payload
 	mcad.Id = request.ID
 	mcad.Seat = seat
-	mcad.SeatBid = make([]openrtb2.SeatBid, 1)
-	mcad.SeatBid[0].Bid = make([]openrtb2.Bid, 1)
-	mcad.SeatBid[0].Bid[0] = bid
+	mcad.SeatBid = []openrtb2.SeatBid{
+		{Bid: []openrtb2.Bid{bid}},
+	}
 
 	mcMarshalled, err := json.Marshal(mcad)
 	if err != nil {
@@ -237,7 +242,6 @@ func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *ope
 		McAd:    base64.URLEncoding.EncodeToString(mcMarshalled),
 	}
 
-	// Prepare banner html, using template file
 	var filledTemplate bytes.Buffer
 	if err := a.bannerTemplate.Execute(&filledTemplate, bannerData); err != nil {
 		return "", err

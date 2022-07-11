@@ -23,6 +23,12 @@ const (
 	impFallbackSize = "1x1"
 )
 
+var (
+	errSiteNill           = errors.New("site cannot be nill")
+	errImpNotFound        = errors.New("imp not found")
+	errNotSupportedFormat = errors.New("bid format is not supported")
+)
+
 // mcAd defines the MC payload for banner ads.
 type mcAd struct {
 	Id      string             `json:"id"`
@@ -151,51 +157,8 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	var errors []error
 	for _, seatBid := range response.SeatBid {
 		for _, bid := range seatBid.Bid {
-			var bidType openrtb_ext.BidType
-
-			/*
-			  Determine bid type
-			  At this moment we only check if bid contains Adm property
-
-			  Later updates will check for video & native data
-			*/
-			if bid.AdM != "" {
-				bidType = openrtb_ext.BidTypeBanner
-			}
-
-			/*
-			  Recover original ImpID
-			  (stored on request in TagID)
-			*/
-			bid.ImpID = getOriginalImpID(bid.ImpID, requestBody.Imp)
-
-			// read additional data from proxy
-			var bidDataExt responseExt
-			if err := json.Unmarshal(bid.Ext, &bidDataExt); err != nil {
+			if err := a.impToBid(internalRequest, requestBody, seatBid, bid, bidResponse); err != nil {
 				errors = append(errors, err)
-			} else {
-				var adCreationError error
-
-				/*
-					use correct ad creation method for a detected bid type
-					right now, we are only creating banner ads
-					if type is not detected / supported, throw error
-				*/
-				if bidType == openrtb_ext.BidTypeBanner {
-					bid.AdM, adCreationError = a.createBannerAd(bid, bidDataExt, internalRequest, seatBid.Seat)
-				} else {
-					adCreationError = fmt.Errorf("bid type is not supported: %s", bidType)
-				}
-
-				if adCreationError != nil {
-					errors = append(errors, adCreationError)
-				} else {
-					// append bid to responses
-					bidResponse.Bids = append(bidResponse.Bids, &adapters.TypedBid{
-						Bid:     &bid,
-						BidType: bidType,
-					})
-				}
 			}
 		}
 	}
@@ -203,14 +166,66 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	return bidResponse, errors
 }
 
-func getOriginalImpID(impID string, imps []openrtb2.Imp) string {
+func (a *adapter) impToBid(internalRequest *openrtb2.BidRequest, requestBody openrtb2.BidRequest, seatBid openrtb2.SeatBid, bid openrtb2.Bid,
+	bidResponse *adapters.BidderResponse) error {
+	var bidType openrtb_ext.BidType
+
+	/*
+	  Determine bid type
+	  At this moment we only check if bid contains Adm property
+
+	  Later updates will check for video & native data
+	*/
+	if bid.AdM != "" {
+		bidType = openrtb_ext.BidTypeBanner
+	}
+
+	/*
+	  Recover original ImpID
+	  (stored on request in TagID)
+	*/
+	impID, err := getOriginalImpID(bid.ImpID, requestBody.Imp)
+	if err != nil {
+		return err
+	}
+	bid.ImpID = impID
+
+	// read additional data from proxy
+	var bidDataExt responseExt
+	if err := json.Unmarshal(bid.Ext, &bidDataExt); err != nil {
+		return err
+	}
+	/*
+		use correct ad creation method for a detected bid type
+		right now, we are only creating banner ads
+		if type is not detected / supported, throw error
+	*/
+	if bidType != openrtb_ext.BidTypeBanner {
+		return errNotSupportedFormat
+	}
+
+	var adCreationError error
+	bid.AdM, adCreationError = a.createBannerAd(bid, bidDataExt, internalRequest, seatBid.Seat)
+	if adCreationError != nil {
+		return adCreationError
+	}
+	// append bid to responses
+	bidResponse.Bids = append(bidResponse.Bids, &adapters.TypedBid{
+		Bid:     &bid,
+		BidType: bidType,
+	})
+
+	return nil
+}
+
+func getOriginalImpID(impID string, imps []openrtb2.Imp) (string, error) {
 	for _, imp := range imps {
 		if imp.ID == impID {
-			return imp.TagID
+			return imp.TagID, nil
 		}
 	}
 
-	return impID
+	return "", errImpNotFound
 }
 
 func (a *adapter) createBannerAd(bid openrtb2.Bid, ext responseExt, request *openrtb2.BidRequest, seat string) (string, error) {
@@ -274,7 +289,7 @@ func getImpSize(imp openrtb2.Imp) string {
 
 func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	if request.Site == nil {
-		return nil, errors.New("site cannot be nill")
+		return nil, errSiteNill
 	}
 
 	var siteID string

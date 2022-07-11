@@ -7,8 +7,7 @@
                 "ext": {
                     "bidder": {
                         "siteId": "237503",
-                        "id": "005",
-                        "test": 1
+                        "id": "005"
                     }
                 },
                 "secure": 1,
@@ -23,7 +22,6 @@
             }
         ],
         "site": {
-            "id": "237503",
             "domain": "test.page",
             "page": "https://test.page/",
             "ref": "https://test.referer/"
@@ -79,7 +77,6 @@
                         },
                         "buyeruid": "test_user"
                     },
-                    "test": 1,
                     "regs": {
                         "ext": {
                             "gdpr": 1

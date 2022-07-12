@@ -4,12 +4,7 @@
         "imp": [
             {
                 "id": "slot",
-                "ext": {
-                    "bidder": {
-                        "siteId": "237503",
-                        "id": "005"
-                    }
-                },
+                "ext": {},
                 "secure": 1,
                 "banner": {
                     "format": [
@@ -46,7 +41,7 @@
                     "id": "test-request",
                     "imp": [
                         {
-                            "id": "005",
+                            "id": "slot",
                             "banner": {
                                 "format": [
                                     {
@@ -66,7 +61,6 @@
                         }
                     ],
                     "site": {
-                        "id": "237503",
                         "domain": "test.page",
                         "page": "https://test.page/",
                         "ref": "https://test.referer/"
@@ -108,7 +102,7 @@
                                     "w": 300,
                                     "h": 250,
                                     "id": "response-005",
-                                    "impid": "005",
+                                    "impid": "slot",
                                     "price": 20
                                 }
                             ],

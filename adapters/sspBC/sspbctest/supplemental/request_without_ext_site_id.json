@@ -46,7 +46,7 @@
                     "id": "test-request",
                     "imp": [
                         {
-                            "id": "005",
+                            "id": "slot",
                             "banner": {
                                 "format": [
                                     {
@@ -107,7 +107,7 @@
                                     "w": 300,
                                     "h": 250,
                                     "id": "response-005",
-                                    "impid": "005",
+                                    "impid": "slot",
                                     "price": 20
                                 }
                             ],

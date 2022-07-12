@@ -3,7 +3,7 @@
         "id": "test-request",
         "imp": [
             {
-                "id": "slot",
+                "id": "slot1",
                 "ext": {
                     "bidder": {
                         "siteId": "237503",
@@ -16,6 +16,24 @@
                         {
                             "w": 300,
                             "h": 250
+                        }
+                    ]
+                }
+            },
+            {
+                "id": "slot2",
+                "ext": {
+                    "bidder": {
+                        "siteId": "237503",
+                        "id": "037"
+                    }
+                },
+                "secure": 1,
+                "banner": {
+                    "format": [
+                        {
+                            "w": 300,
+                            "h": 600
                         }
                     ]
                 }
@@ -55,12 +73,31 @@
                                     }
                                 ]
                             },
-                            "tagid": "slot",
+                            "tagid": "slot1",
                             "secure": 1,
                             "ext": {
                                 "data": {
-                                    "pbslot": "slot",
+                                    "pbslot": "slot1",
                                     "pbsize": "300x250"
+                                }
+                            }
+                        },
+                        {
+                            "id": "037",
+                            "banner": {
+                                "format": [
+                                    {
+                                        "w": 300,
+                                        "h": 600
+                                    }
+                                ]
+                            },
+                            "tagid": "slot2",
+                            "secure": 1,
+                            "ext": {
+                                "data": {
+                                    "pbslot": "slot2",
+                                    "pbsize": "300x600"
                                 }
                             }
                         }
@@ -93,7 +130,7 @@
                         {
                             "bid": [
                                 {
-                                    "adm": "<!--preformatted-->test_ad",
+                                    "adm": "<!--preformatted-->test_ad_1",
                                     "adomain": [
                                         "sspbc-test"
                                     ],
@@ -103,13 +140,37 @@
                                         "pubid": "431",
                                         "siteid": "237503",
                                         "slotid": "005",
-                                        "tagid": "slot"
+                                        "tagid": "slot1"
                                     },
                                     "w": 300,
                                     "h": 250,
                                     "id": "response-005",
                                     "impid": "005",
                                     "price": 20
+                                }
+                            ],
+                            "seat": "sspbc-test"
+                        },
+                        {
+                            "bid": [
+                                {
+                                    "adm": "<!--preformatted-->test_ad_2",
+                                    "adomain": [
+                                        "sspbc-test"
+                                    ],
+                                    "crid": "5678",
+                                    "ext": {
+                                        "adlabel": "Reklama",
+                                        "pubid": "431",
+                                        "siteid": "237503",
+                                        "slotid": "037",
+                                        "tagid": "slot2"
+                                    },
+                                    "w": 300,
+                                    "h": 600,
+                                    "id": "response-037",
+                                    "impid": "037",
+                                    "price": 10
                                 }
                             ],
                             "seat": "sspbc-test"
@@ -127,9 +188,9 @@
                 {
                     "bid": {
                         "id": "response-005",
-                        "impid": "slot",
+                        "impid": "slot1",
                         "price": 20,
-                        "adm": "<!--preformatted-->test_ad",
+                        "adm": "<!--preformatted-->test_ad_1",
                         "adomain": [
                             "sspbc-test"
                         ],
@@ -141,7 +202,29 @@
                             "pubid": "431",
                             "siteid": "237503",
                             "slotid": "005",
-                            "tagid": "slot"
+                            "tagid": "slot1"
+                        }
+                    },
+                    "type": "banner"
+                },
+                {
+                    "bid": {
+                        "id": "response-037",
+                        "impid": "slot2",
+                        "price": 10,
+                        "adm": "<!--preformatted-->test_ad_2",
+                        "adomain": [
+                            "sspbc-test"
+                        ],
+                        "crid": "5678",
+                        "w": 300,
+                        "h": 600,
+                        "ext": {
+                            "adlabel": "Reklama",
+                            "pubid": "431",
+                            "siteid": "237503",
+                            "slotid": "037",
+                            "tagid": "slot2"
                         }
                     },
                     "type": "banner"

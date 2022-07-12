@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mxmCherry/openrtb/v15/openrtb2"
+	"github.com/mxmCherry/openrtb/v16/openrtb2"
 	"github.com/prebid/prebid-server/adapters"
 	"github.com/prebid/prebid-server/config"
 	"github.com/prebid/prebid-server/errortypes"
@@ -19,11 +19,11 @@ import (
 )
 
 const (
-	version         = "5.6"
-	impFallbackSize = "1x1"
+	version             = "5.6"
+	impFallbackSize     = "1x1"
 	requestTypeStandard = 1
-	requestTypeOneCode = 2
-	requestTypeTest = 3
+	requestTypeOneCode  = 2
+	requestTypeTest     = 3
 )
 
 var (
@@ -76,7 +76,6 @@ type adapter struct {
 
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
-
 func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
 	// HTML template used to create banner ads
 	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="` +
@@ -291,11 +290,9 @@ func getImpSize(imp openrtb2.Imp) string {
 	return impSize
 }
 
-/* 
-	Read additional data for this imp (site id , placement id, test)
-	Errors in parameters do not break imp flow, and thus are not returned
-*/ 
-func getBidParameters(imp openrtb2.Imp) openrtb_ext.ExtImpSspbc { 
+// getBidParameters reads additional data for this imp (site id , placement id, test)
+// Errors in parameters do not break imp flow, and thus are not returned
+func getBidParameters(imp openrtb2.Imp) openrtb_ext.ExtImpSspbc {
 	var extBidder adapters.ExtImpBidder
 	var extSSP openrtb_ext.ExtImpSspbc
 
@@ -306,13 +303,11 @@ func getBidParameters(imp openrtb2.Imp) openrtb_ext.ExtImpSspbc {
 	return extSSP
 }
 
-/*
-	Check what kind of request we have. It can either be:
-	- a standard request, where all Imps have complete site / placement data
-	- a oneCodeRequest, where site / placement data has to be determined by server
-	- a test request, where server returns fixed example ads
-*/
-func getRequestType(request *openrtb2.BidRequest) int { 
+// getRequestType checks what kind of request we have. It can either be:
+// - a standard request, where all Imps have complete site / placement data
+// - a oneCodeRequest, where site / placement data has to be determined by server
+// - a test request, where server returns fixed example ads
+func getRequestType(request *openrtb2.BidRequest) int {
 	incompleteImps := 0
 
 	for _, imp := range request.Imp {
@@ -323,15 +318,14 @@ func getRequestType(request *openrtb2.BidRequest) int {
 			return requestTypeTest
 		}
 
-		if (extSSP.SiteId == "" || extSSP.Id == "") { 
+		if extSSP.SiteId == "" || extSSP.Id == "" {
 			incompleteImps += 1
 		}
 	}
 
-	if (incompleteImps > 0) { 
+	if incompleteImps > 0 {
 		return requestTypeOneCode
 	}
-
 
 	return requestTypeStandard
 }
@@ -354,7 +348,6 @@ func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.Bid
 		if extSSP.SiteId != "" {
 			siteID = extSSP.SiteId
 		}
-
 
 		// save current imp.id (adUnit name) as imp.tagid
 		// we will recover it in makeBids
@@ -387,11 +380,11 @@ func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.Bid
 	siteCopy := *request.Site
 	request.Site = &siteCopy
 
-	/* 
+	/*
 		update site ID
 		for oneCode request it has to be blank
-		for other requests it should be equal to 
-		SiteId from one of the bids 
+		for other requests it should be equal to
+		SiteId from one of the bids
 	*/
 	if requestType == requestTypeOneCode || siteID == "" {
 		request.Site.ID = ""

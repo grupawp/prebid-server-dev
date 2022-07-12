@@ -6,7 +6,7 @@
                 "id": "slot",
                 "ext": {
                     "bidder": {
-                        "siteId": "237503"                       
+                        "siteId": "237503"
                     }
                 },
                 "secure": 1,
@@ -65,7 +65,6 @@
                         }
                     ],
                     "site": {
-                        "id": "237503",
                         "domain": "test.page",
                         "page": "https://test.page/",
                         "ref": "https://test.referer/"

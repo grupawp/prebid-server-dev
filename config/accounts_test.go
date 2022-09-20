@@ -246,11 +246,14 @@ func TestAccountIntegrationGetByIntegrationType(t *testing.T) {
 }
 
 func TestPurposeEnforced(t *testing.T) {
+	True := true
+	False := false
+
 	tests := []struct {
 		description          string
 		givePurposeConfigNil bool
-		givePurpose1Enforced string
-		givePurpose2Enforced string
+		givePurpose1Enforced *bool
+		givePurpose2Enforced *bool
 		givePurpose          consentconstants.Purpose
 		wantEnforced         bool
 		wantEnforcedSet      bool
@@ -264,28 +267,28 @@ func TestPurposeEnforced(t *testing.T) {
 		},
 		{
 			description:          "Purpose 1 Enforced not set",
-			givePurpose1Enforced: "",
+			givePurpose1Enforced: nil,
 			givePurpose:          1,
 			wantEnforced:         true,
 			wantEnforcedSet:      false,
 		},
 		{
 			description:          "Purpose 1 Enforced set to full enforcement",
-			givePurpose1Enforced: TCF2FullEnforcement,
+			givePurpose1Enforced: &True,
 			givePurpose:          1,
 			wantEnforced:         true,
 			wantEnforcedSet:      true,
 		},
 		{
 			description:          "Purpose 1 Enforced set to no enforcement",
-			givePurpose1Enforced: TCF2NoEnforcement,
+			givePurpose1Enforced: &False,
 			givePurpose:          1,
 			wantEnforced:         false,
 			wantEnforcedSet:      true,
 		},
 		{
 			description:          "Purpose 2 Enforced set to full enforcement",
-			givePurpose2Enforced: TCF2FullEnforcement,
+			givePurpose2Enforced: &True,
 			givePurpose:          2,
 			wantEnforced:         true,
 			wantEnforcedSet:      true,
@@ -711,8 +714,8 @@ func TestBasicEnforcementVendor(t *testing.T) {
 
 func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 	type fields struct {
-		Enabled  bool
-		Adapters map[string]AdapterAlternateBidderCodes
+		Enabled bool
+		Bidders map[string]AdapterAlternateBidderCodes
 	}
 	type args struct {
 		bidder          string
@@ -763,7 +766,7 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 			},
 			fields: fields{
 				Enabled: true,
-				Adapters: map[string]AdapterAlternateBidderCodes{
+				Bidders: map[string]AdapterAlternateBidderCodes{
 					"appnexus": {},
 				},
 			},
@@ -771,19 +774,33 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 			wantErr:     errors.New(`alternateBidderCodes not defined for adapter "pubmatic", rejecting bids for "groupm"`),
 		},
 		{
-			name: "account.alternatebiddercodes config enabled but adapter config has allowedBidderCodes list empty or not defined",
+			name: "account.alternatebiddercodes config enabled but adapter config is disabled",
 			args: args{
 				bidder:          "pubmatic",
 				alternateBidder: "groupm",
 			},
 			fields: fields{
 				Enabled: true,
-				Adapters: map[string]AdapterAlternateBidderCodes{
-					"pubmatic": {},
+				Bidders: map[string]AdapterAlternateBidderCodes{
+					"pubmatic": {Enabled: false},
 				},
 			},
 			wantIsValid: false,
 			wantErr:     errors.New(`alternateBidderCodes disabled for "pubmatic", rejecting bids for "groupm"`),
+		},
+		{
+			name: "account.alternatebiddercodes and adapter config enabled but adapter config does not have allowedBidderCodes defined",
+			args: args{
+				bidder:          "pubmatic",
+				alternateBidder: "groupm",
+			},
+			fields: fields{
+				Enabled: true,
+				Bidders: map[string]AdapterAlternateBidderCodes{
+					"pubmatic": {Enabled: true},
+				},
+			},
+			wantIsValid: true,
 		},
 		{
 			name: "allowedBidderCodes is *",
@@ -793,8 +810,9 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 			},
 			fields: fields{
 				Enabled: true,
-				Adapters: map[string]AdapterAlternateBidderCodes{
+				Bidders: map[string]AdapterAlternateBidderCodes{
 					"pubmatic": {
+						Enabled:            true,
 						AllowedBidderCodes: []string{"*"},
 					},
 				},
@@ -809,8 +827,9 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 			},
 			fields: fields{
 				Enabled: true,
-				Adapters: map[string]AdapterAlternateBidderCodes{
+				Bidders: map[string]AdapterAlternateBidderCodes{
 					"pubmatic": {
+						Enabled:            true,
 						AllowedBidderCodes: []string{"groupm"},
 					},
 				},
@@ -825,10 +844,26 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 			},
 			fields: fields{
 				Enabled: true,
-				Adapters: map[string]AdapterAlternateBidderCodes{
+				Bidders: map[string]AdapterAlternateBidderCodes{
 					"pubmatic": {
+						Enabled:            true,
 						AllowedBidderCodes: []string{"xyz"},
 					},
+				},
+			},
+			wantIsValid: false,
+			wantErr:     errors.New(`invalid biddercode "groupm" sent by adapter "pubmatic"`),
+		},
+		{
+			name: "account.alternatebiddercodes and adapter config enabled but adapter config has allowedBidderCodes list empty",
+			args: args{
+				bidder:          "pubmatic",
+				alternateBidder: "groupm",
+			},
+			fields: fields{
+				Enabled: true,
+				Bidders: map[string]AdapterAlternateBidderCodes{
+					"pubmatic": {Enabled: true, AllowedBidderCodes: []string{}},
 				},
 			},
 			wantIsValid: false,
@@ -838,8 +873,8 @@ func TestAlternateBidderCodes_IsValidBidderCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AlternateBidderCodes{
-				Enabled:  tt.fields.Enabled,
-				Adapters: tt.fields.Adapters,
+				Enabled: tt.fields.Enabled,
+				Bidders: tt.fields.Bidders,
 			}
 			gotIsValid, gotErr := a.IsValidBidderCode(tt.args.bidder, tt.args.alternateBidder)
 			assert.Equal(t, tt.wantIsValid, gotIsValid)

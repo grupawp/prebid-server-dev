@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	version             = "5.6"
-	impFallbackSize     = "1x1"
-	requestTypeStandard = 1
-	requestTypeOneCode  = 2
-	requestTypeTest     = 3
+	adapterVersion              = "5.6"
+	impFallbackSize             = "1x1"
+	requestTypeStandard         = 1
+	requestTypeOneCode          = 2
+	requestTypeTest             = 3
+	prebidServerIntegrationType = "4"
 )
 
 var (
@@ -76,7 +77,7 @@ type adapter struct {
 
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
-func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
+func Builder(_ openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, error) {
 	// HTML template used to create banner ads
 	const bannerHTML = `<html><head><title></title><meta charset="UTF-8"><meta name="viewport" content="` +
 		`width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0;` +
@@ -101,7 +102,7 @@ func Builder(bidderName openrtb_ext.BidderName, config config.Adapter) (adapters
 }
 
 func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	formattedRequest, err := formatSspBcRequest(a, request)
+	formattedRequest, err := formatSspBcRequest(request)
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -118,8 +119,8 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapte
 
 	// add query parameters to request
 	queryParams := requestURL.Query()
-	queryParams.Add("bdver", version) // adapter version
-	queryParams.Add("inver", "0")     // integration version (adapter, tag, ...)
+	queryParams.Add("bdver", adapterVersion)
+	queryParams.Add("inver", prebidServerIntegrationType)
 	requestURL.RawQuery = queryParams.Encode()
 
 	requestData := &adapters.RequestData{
@@ -143,12 +144,6 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 		return nil, []error{err}
 	}
 
-	// unmarshall original request - we will need it to recover imp.Id
-	var requestBody openrtb2.BidRequest
-	if err := json.Unmarshal(externalRequest.Body, &requestBody); err != nil {
-		return nil, []error{err}
-	}
-
 	var response openrtb2.BidResponse
 	if err := json.Unmarshal(externalResponse.Body, &response); err != nil {
 		return nil, []error{err}
@@ -160,7 +155,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	var errors []error
 	for _, seatBid := range response.SeatBid {
 		for _, bid := range seatBid.Bid {
-			if err := a.impToBid(internalRequest, requestBody, seatBid, bid, bidResponse); err != nil {
+			if err := a.impToBid(internalRequest, seatBid, bid, bidResponse); err != nil {
 				errors = append(errors, err)
 			}
 		}
@@ -169,7 +164,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 	return bidResponse, errors
 }
 
-func (a *adapter) impToBid(internalRequest *openrtb2.BidRequest, requestBody openrtb2.BidRequest, seatBid openrtb2.SeatBid, bid openrtb2.Bid,
+func (a *adapter) impToBid(internalRequest *openrtb2.BidRequest, seatBid openrtb2.SeatBid, bid openrtb2.Bid,
 	bidResponse *adapters.BidderResponse) error {
 	var bidType openrtb_ext.BidType
 
@@ -187,7 +182,7 @@ func (a *adapter) impToBid(internalRequest *openrtb2.BidRequest, requestBody ope
 	  Recover original ImpID
 	  (stored on request in TagID)
 	*/
-	impID, err := getOriginalImpID(bid.ImpID, requestBody.Imp)
+	impID, err := getOriginalImpID(bid.ImpID, internalRequest.Imp)
 	if err != nil {
 		return err
 	}
@@ -330,7 +325,7 @@ func getRequestType(request *openrtb2.BidRequest) int {
 	return requestTypeStandard
 }
 
-func formatSspBcRequest(a *adapter, request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
+func formatSspBcRequest(request *openrtb2.BidRequest) (*openrtb2.BidRequest, error) {
 	if request.Site == nil {
 		return nil, errSiteNill
 	}

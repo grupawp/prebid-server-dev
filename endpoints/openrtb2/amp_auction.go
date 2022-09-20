@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
+
 	accountService "github.com/prebid/prebid-server/account"
 	"github.com/prebid/prebid-server/amp"
 	"github.com/prebid/prebid-server/analytics"
@@ -19,9 +21,6 @@ import (
 	"github.com/prebid/prebid-server/exchange"
 	"github.com/prebid/prebid-server/metrics"
 	"github.com/prebid/prebid-server/openrtb_ext"
-	"github.com/prebid/prebid-server/privacy"
-	"github.com/prebid/prebid-server/privacy/ccpa"
-	"github.com/prebid/prebid-server/privacy/gdpr"
 	"github.com/prebid/prebid-server/stored_requests"
 	"github.com/prebid/prebid-server/stored_requests/backends/empty_fetcher"
 	"github.com/prebid/prebid-server/stored_responses"
@@ -138,13 +137,13 @@ func (deps *endpointDeps) AmpAuction(w http.ResponseWriter, r *http.Request, _ h
 	w.Header().Set("Access-Control-Expose-Headers", "AMP-Access-Control-Allow-Source-Origin")
 	w.Header().Set("X-Prebid", version.BuildXPrebidHeader(version.Ver))
 
-	req, storedAuctionResponses, storedBidResponses, errL := deps.parseAmpRequest(r)
+	req, storedAuctionResponses, storedBidResponses, bidderImpReplaceImp, errL := deps.parseAmpRequest(r)
 	ao.Errors = append(ao.Errors, errL...)
 
 	if errortypes.ContainsFatalError(errL) {
 		w.WriteHeader(http.StatusBadRequest)
 		for _, err := range errortypes.FatalOnly(errL) {
-			w.Write([]byte(fmt.Sprintf("Invalid request format: %s\n", err.Error())))
+			w.Write([]byte(fmt.Sprintf("Invalid request: %s\n", err.Error())))
 		}
 		labels.RequestStatus = metrics.RequestStatusBadInput
 		return
@@ -181,11 +180,16 @@ func (deps *endpointDeps) AmpAuction(w http.ResponseWriter, r *http.Request, _ h
 				metricsStatus = metrics.RequestStatusBlacklisted
 				break
 			}
+			if errCode == errortypes.MalformedAcctErrorCode {
+				httpStatus = http.StatusInternalServerError
+				metricsStatus = metrics.RequestStatusAccountConfigErr
+				break
+			}
 		}
 		w.WriteHeader(httpStatus)
 		labels.RequestStatus = metricsStatus
 		for _, err := range errortypes.FatalOnly(errL) {
-			w.Write([]byte(fmt.Sprintf("Invalid request format: %s\n", err.Error())))
+			w.Write([]byte(fmt.Sprintf("Invalid request: %s\n", err.Error())))
 		}
 		ao.Errors = append(ao.Errors, acctIDErrs...)
 		return
@@ -203,6 +207,7 @@ func (deps *endpointDeps) AmpAuction(w http.ResponseWriter, r *http.Request, _ h
 		GlobalPrivacyControlHeader: secGPC,
 		StoredAuctionResponses:     storedAuctionResponses,
 		StoredBidResponses:         storedBidResponses,
+		BidderImpReplaceImpID:      bidderImpReplaceImp,
 		PubID:                      labels.PubID,
 	}
 
@@ -304,9 +309,9 @@ func (deps *endpointDeps) AmpAuction(w http.ResponseWriter, r *http.Request, _ h
 // possible, it will return errors with messages that suggest improvements.
 //
 // If the errors list has at least one element, then no guarantees are made about the returned request.
-func (deps *endpointDeps) parseAmpRequest(httpRequest *http.Request) (req *openrtb2.BidRequest, storedAuctionResponses stored_responses.ImpsWithBidResponses, storedBidResponses stored_responses.ImpBidderStoredResp, errs []error) {
+func (deps *endpointDeps) parseAmpRequest(httpRequest *http.Request) (req *openrtb2.BidRequest, storedAuctionResponses stored_responses.ImpsWithBidResponses, storedBidResponses stored_responses.ImpBidderStoredResp, bidderImpReplaceImp stored_responses.BidderImpReplaceImpID, errs []error) {
 	// Load the stored request for the AMP ID.
-	req, storedAuctionResponses, storedBidResponses, e := deps.loadRequestJSONForAmp(httpRequest)
+	req, storedAuctionResponses, storedBidResponses, bidderImpReplaceImp, e := deps.loadRequestJSONForAmp(httpRequest)
 	if errs = append(errs, e...); errortypes.ContainsFatalError(errs) {
 		return
 	}
@@ -331,13 +336,13 @@ func (deps *endpointDeps) parseAmpRequest(httpRequest *http.Request) (req *openr
 }
 
 // Load the stored OpenRTB request for an incoming AMP request, or return the errors found.
-func (deps *endpointDeps) loadRequestJSONForAmp(httpRequest *http.Request) (req *openrtb2.BidRequest, storedAuctionResponses stored_responses.ImpsWithBidResponses, storedBidResponses stored_responses.ImpBidderStoredResp, errs []error) {
+func (deps *endpointDeps) loadRequestJSONForAmp(httpRequest *http.Request) (req *openrtb2.BidRequest, storedAuctionResponses stored_responses.ImpsWithBidResponses, storedBidResponses stored_responses.ImpBidderStoredResp, bidderImpReplaceImp stored_responses.BidderImpReplaceImpID, errs []error) {
 	req = &openrtb2.BidRequest{}
 	errs = nil
 
 	ampParams, err := amp.ParseParams(httpRequest)
 	if err != nil {
-		return nil, nil, nil, []error{err}
+		return nil, nil, nil, nil, []error{err}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(storedRequestTimeoutMillis)*time.Millisecond)
@@ -345,7 +350,7 @@ func (deps *endpointDeps) loadRequestJSONForAmp(httpRequest *http.Request) (req 
 
 	storedRequests, _, errs := deps.storedReqFetcher.FetchRequests(ctx, []string{ampParams.StoredRequestID}, nil)
 	if len(errs) > 0 {
-		return nil, nil, nil, errs
+		return nil, nil, nil, nil, errs
 	}
 	if len(storedRequests) == 0 {
 		errs = []error{fmt.Errorf("No AMP config found for tag_id '%s'", ampParams.StoredRequestID)}
@@ -359,7 +364,7 @@ func (deps *endpointDeps) loadRequestJSONForAmp(httpRequest *http.Request) (req 
 		return
 	}
 
-	storedAuctionResponses, storedBidResponses, errs = stored_responses.ProcessStoredResponses(ctx, requestJSON, deps.storedRespFetcher, deps.bidderMap)
+	storedAuctionResponses, storedBidResponses, bidderImpReplaceImp, errs = stored_responses.ProcessStoredResponses(ctx, requestJSON, deps.storedRespFetcher, deps.bidderMap)
 	if err != nil {
 		errs = []error{err}
 		return
@@ -441,7 +446,7 @@ func (deps *endpointDeps) overrideWithParams(ampParams amp.Params, req *openrtb2
 		req.Imp[0].TagID = ampParams.Slot
 	}
 
-	policyWriter, policyWriterErr := readPolicy(ampParams.Consent)
+	policyWriter, policyWriterErr := amp.ReadPolicy(ampParams, deps.cfg.GDPR.Enabled)
 	if policyWriterErr != nil {
 		return []error{policyWriterErr}
 	}
@@ -453,6 +458,31 @@ func (deps *endpointDeps) overrideWithParams(ampParams amp.Params, req *openrtb2
 		req.TMax = int64(*ampParams.Timeout) - deps.cfg.AMPTimeoutAdjustment
 	}
 
+	if err := setTargeting(req, ampParams.Targeting); err != nil {
+		return []error{err}
+	}
+
+	return nil
+}
+
+// setTargeting merges "targeting" to imp[0].ext.data
+func setTargeting(req *openrtb2.BidRequest, targeting string) error {
+	if len(targeting) == 0 {
+		return nil
+	}
+
+	targetingData := exchange.WrapJSONInData([]byte(targeting))
+
+	if len(req.Imp[0].Ext) > 0 {
+		newImpExt, err := jsonpatch.MergePatch(req.Imp[0].Ext, targetingData)
+		if err != nil {
+			return fmt.Errorf("unable to merge imp.ext with targeting data, check targeting data is correct: %s", err.Error())
+		}
+		req.Imp[0].Ext = newImpExt
+		return nil
+	}
+
+	req.Imp[0].Ext = targetingData
 	return nil
 }
 
@@ -548,25 +578,6 @@ func setAmpExt(site *openrtb2.Site, value string) {
 		}
 	} else {
 		site.Ext = json.RawMessage(`{"amp":` + value + `}`)
-	}
-}
-
-func readPolicy(consent string) (privacy.PolicyWriter, error) {
-	if len(consent) == 0 {
-		return privacy.NilPolicyWriter{}, nil
-	}
-
-	if gdpr.ValidateConsent(consent) {
-		return gdpr.ConsentWriter{consent}, nil
-	}
-
-	if ccpa.ValidateConsent(consent) {
-		return ccpa.ConsentWriter{consent}, nil
-	}
-
-	return privacy.NilPolicyWriter{}, &errortypes.Warning{
-		Message:     fmt.Sprintf("Consent '%s' is not recognized as either CCPA or GDPR TCF.", consent),
-		WarningCode: errortypes.InvalidPrivacyConsentWarningCode,
 	}
 }
 

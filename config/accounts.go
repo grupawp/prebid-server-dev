@@ -125,13 +125,10 @@ func (a *AccountGDPR) PurposeEnforced(purpose consentconstants.Purpose) (value, 
 	if a.PurposeConfigs[purpose] == nil {
 		return true, false
 	}
-	if a.PurposeConfigs[purpose].EnforcePurpose == TCF2FullEnforcement {
-		return true, true
+	if a.PurposeConfigs[purpose].EnforcePurpose == nil {
+		return true, false
 	}
-	if a.PurposeConfigs[purpose].EnforcePurpose == TCF2NoEnforcement {
-		return false, true
-	}
-	return true, false
+	return *a.PurposeConfigs[purpose].EnforcePurpose, true
 }
 
 // PurposeEnforcingVendors gets the account level enforce vendors setting for a given purpose returning the value and
@@ -179,7 +176,8 @@ func (a *AccountGDPR) PurposeOneTreatmentAccessAllowed() (value, exists bool) {
 
 // AccountGDPRPurpose represents account-specific GDPR purpose configuration
 type AccountGDPRPurpose struct {
-	EnforcePurpose string `mapstructure:"enforce_purpose" json:"enforce_purpose,omitempty"`
+	EnforceAlgo    string `mapstructure:"enforce_algo" json:"enforce_algo,omitempty"`
+	EnforcePurpose *bool  `mapstructure:"enforce_purpose" json:"enforce_purpose,omitempty"`
 	EnforceVendors *bool  `mapstructure:"enforce_vendors" json:"enforce_vendors,omitempty"`
 	// Array of vendor exceptions that is used to create the hash table VendorExceptionMap so vendor names can be instantly accessed
 	VendorExceptions   []openrtb_ext.BidderName `mapstructure:"vendor_exceptions" json:"vendor_exceptions"`
@@ -227,11 +225,12 @@ func (a *AccountIntegration) GetByIntegrationType(integrationType IntegrationTyp
 }
 
 type AlternateBidderCodes struct {
-	Enabled  bool                                   `mapstructure:"enabled" json:"enabled"`
-	Adapters map[string]AdapterAlternateBidderCodes `mapstructure:"adapters" json:"adapters"`
+	Enabled bool                                   `mapstructure:"enabled" json:"enabled"`
+	Bidders map[string]AdapterAlternateBidderCodes `mapstructure:"bidders" json:"bidders"`
 }
 
 type AdapterAlternateBidderCodes struct {
+	Enabled            bool     `mapstructure:"enabled" json:"enabled"`
 	AllowedBidderCodes []string `mapstructure:"allowedbiddercodes" json:"allowedbiddercodes"`
 }
 
@@ -246,20 +245,21 @@ func (bidderCodes *AlternateBidderCodes) IsValidBidderCode(bidder, alternateBidd
 		return false, nil
 	}
 
-	if bidderCodes.Adapters == nil {
+	if bidderCodes.Bidders == nil {
 		return false, fmt.Errorf(ErrAlternateBidderNotDefined, bidder, alternateBidder)
 	}
 
-	adapterCfg, ok := bidderCodes.Adapters[bidder]
+	adapterCfg, ok := bidderCodes.Bidders[bidder]
 	if !ok {
 		return false, fmt.Errorf(ErrAlternateBidderNotDefined, bidder, alternateBidder)
 	}
 
-	if len(adapterCfg.AllowedBidderCodes) == 0 {
+	if !adapterCfg.Enabled {
+		// config has bidder entry but is not enabled, report it
 		return false, fmt.Errorf("alternateBidderCodes disabled for %q, rejecting bids for %q", bidder, alternateBidder)
 	}
 
-	if adapterCfg.AllowedBidderCodes[0] == "*" {
+	if adapterCfg.AllowedBidderCodes == nil || (len(adapterCfg.AllowedBidderCodes) == 1 && adapterCfg.AllowedBidderCodes[0] == "*") {
 		return true, nil
 	}
 

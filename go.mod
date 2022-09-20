@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/IABTechLab/adscert v0.34.0
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/benbjohnson/clock v1.3.0
@@ -30,8 +31,9 @@ require (
 	github.com/yudai/gojsondiff v1.0.0
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82 // indirect
 	github.com/yudai/pp v2.0.1+incompatible // indirect
-	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
+	golang.org/x/net v0.0.0-20220909164309-bea034e7d591
 	golang.org/x/text v0.3.7
+	google.golang.org/grpc v1.46.2
 	gopkg.in/evanphx/json-patch.v4 v4.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )

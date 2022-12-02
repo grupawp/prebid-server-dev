@@ -83,7 +83,7 @@ func Builder(_ openrtb_ext.BidderName, config config.Adapter) (adapters.Bidder, 
 		`width=device-width, initial-scale=1.0"><style> body { background-color: transparent; margin: 0;` +
 		` padding: 0; }</style><script> window.rekid = {{.SiteId}}; window.slot = {{.SlotId}}; window.ad` +
 		`label = '{{.AdLabel}}'; window.pubid = '{{.PubId}}'; window.wp_sn = 'sspbc_go'; window.page = '` +
-		`{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = {{.McAd}}; window.in` +
+		`{{.Page}}'; window.ref = '{{.Referer}}'; window.mcad = JSON.parse('{{.McAd}}'); window.in` +
 		`ver = '{{.Inver}}'; </script></head><body><div id="c"></div><script async c` +
 		`rossorigin nomodule src="//std.wpcdn.pl/wpjslib/wpjslib-inline.js" id="wpjslib"></script><scrip` +
 		`t async crossorigin type="module" src="//std.wpcdn.pl/wpjslib6/wpjslib-inline.js" id="wpjslib6"` +

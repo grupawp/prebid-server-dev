@@ -37,7 +37,7 @@
     "httpCalls": [
         {
             "expectedRequest": {
-                "uri": "http://ssp.wp.test/bidder/?bdver=5.8",
+                "uri": "http://ssp.wp.test/bidder/?bdver=6.0",
                 "body": {
                     "bidRequest": {
                         "id": "test-request",

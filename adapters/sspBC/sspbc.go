@@ -16,21 +16,21 @@ import (
 )
 
 const (
-	adapterVersion = "5.8"
+	adapterVersion = "6.0"
 )
 
-type RequestData struct {
-	Request     *openrtb2.BidRequest `json:"bidRequest"`
-	RequestInfo *RequestInfo         `json:"requestInfo"`
-}
-
-type RequestInfo struct {
-	PbsEntryPoint metrics.RequestType
-}
-
-type adapter struct {
-	endpoint string
-}
+type (
+	adapter struct {
+		endpoint string
+	}
+	requestInfo struct {
+		PbsEntryPoint metrics.RequestType
+	}
+	requestData struct {
+		Request     *openrtb2.BidRequest `json:"bidRequest"`
+		RequestInfo *requestInfo         `json:"requestInfo"`
+	}
+)
 
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
@@ -42,11 +42,11 @@ func Builder(_ openrtb_ext.BidderName, config config.Adapter, _ config.Server) (
 	return bidder, nil
 }
 
-func (a *adapter) MakeRequests(request *openrtb2.BidRequest, requestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
-	sspBcRequest := &RequestData{
+func (a *adapter) MakeRequests(request *openrtb2.BidRequest, extraRequestInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
+	sspBcRequest := &requestData{
 		Request: request,
-		RequestInfo: &RequestInfo{
-			PbsEntryPoint: requestInfo.PbsEntryPoint,
+		RequestInfo: &requestInfo{
+			PbsEntryPoint: extraRequestInfo.PbsEntryPoint,
 		},
 	}
 
@@ -97,7 +97,8 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 
 	var errors []error
 	for _, seatBid := range response.SeatBid {
-		for _, bid := range seatBid.Bid {
+		for i := range seatBid.Bid {
+			bid := seatBid.Bid[i]
 			bidType, err := getBidType(bid)
 			if err != nil {
 				return nil, []error{err}

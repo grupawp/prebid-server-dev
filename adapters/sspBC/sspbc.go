@@ -32,19 +32,6 @@ type (
 	}
 )
 
-func buildAdapterEndpoint(endpoint string, adapterVersion string) (string, error) {
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		return "", fmt.Errorf("unable to parse endpoint URL: %w", err)
-	}
-
-	params := endpointURL.Query()
-	params.Add("bdver", adapterVersion)
-	endpointURL.RawQuery = params.Encode()
-
-	return endpointURL.String(), nil
-}
-
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
 func Builder(_ openrtb_ext.BidderName, config config.Adapter, _ config.Server) (adapters.Bidder, error) {
@@ -137,4 +124,17 @@ func getBidType(bid openrtb2.Bid) (openrtb_ext.BidType, error) {
 			Message: fmt.Sprintf("unsupported MType: %d.", bid.MType),
 		}
 	}
+}
+
+func buildAdapterEndpoint(endpoint string, adapterVersion string) (string, error) {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse endpoint URL: %w", err)
+	}
+
+	params := endpointURL.Query()
+	params.Add("bdver", adapterVersion)
+	endpointURL.RawQuery = params.Encode()
+
+	return endpointURL.String(), nil
 }

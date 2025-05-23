@@ -131,7 +131,7 @@
     ],
     "expectedMakeBidsErrors": [
         {
-            "value": "Unsupported MType: 0.",
+            "value": "unsupported MType: 0.",
             "comparison": "literal"
         }
     ]

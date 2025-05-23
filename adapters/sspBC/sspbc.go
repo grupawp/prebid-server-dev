@@ -32,11 +32,29 @@ type (
 	}
 )
 
+func buildAdapterEndpoint(endpoint string, adapterVersion string) (string, error) {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse endpoint URL: %w", err)
+	}
+
+	params := endpointURL.Query()
+	params.Add("bdver", adapterVersion)
+	endpointURL.RawQuery = params.Encode()
+
+	return endpointURL.String(), nil
+}
+
 // ---------------ADAPTER INTERFACE------------------
 // Builder builds a new instance of the sspBC adapter
 func Builder(_ openrtb_ext.BidderName, config config.Adapter, _ config.Server) (adapters.Bidder, error) {
+	endpoint, err := buildAdapterEndpoint(config.Endpoint, adapterVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build sspbc adapter endpoint: %w", err)
+	}
+
 	bidder := &adapter{
-		endpoint: config.Endpoint,
+		endpoint: endpoint,
 	}
 
 	return bidder, nil
@@ -55,19 +73,9 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, extraRequestInfo *a
 		return nil, []error{err}
 	}
 
-	requestURL, err := url.Parse(a.endpoint)
-	if err != nil {
-		return nil, []error{err}
-	}
-
-	// add query parameters to request
-	queryParams := requestURL.Query()
-	queryParams.Add("bdver", adapterVersion)
-	requestURL.RawQuery = queryParams.Encode()
-
 	requestData := &adapters.RequestData{
 		Method: http.MethodPost,
-		Uri:    requestURL.String(),
+		Uri:    a.endpoint,
 		Body:   requestJSON,
 		ImpIDs: openrtb_ext.GetImpIDs(request.Imp),
 	}
@@ -82,7 +90,7 @@ func (a *adapter) MakeBids(internalRequest *openrtb2.BidRequest, externalRequest
 
 	if externalResponse.StatusCode != http.StatusOK {
 		err := &errortypes.BadServerResponse{
-			Message: fmt.Sprintf("Unexpected status code: %d.", externalResponse.StatusCode),
+			Message: fmt.Sprintf("unexpected status code: %d.", externalResponse.StatusCode),
 		}
 		return nil, []error{err}
 	}
@@ -126,7 +134,7 @@ func getBidType(bid openrtb2.Bid) (openrtb_ext.BidType, error) {
 		return openrtb_ext.BidTypeNative, nil
 	default:
 		return "", &errortypes.BadServerResponse{
-			Message: fmt.Sprintf("Unsupported MType: %d.", bid.MType),
+			Message: fmt.Sprintf("unsupported MType: %d.", bid.MType),
 		}
 	}
 }
